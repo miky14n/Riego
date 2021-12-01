@@ -12,11 +12,12 @@ const int LED_RED = 14;
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
-long lecturaHumity;
+int lecturaHumity;
 float temperature;
 int statusHumity;
 String estausAlexa;
 String estatusAWS;
+String estadoRiego="Hola Bienvenvenido";
 
 const char* WIFI_SSID = "COMTECO-95888697";
 const char* WIFI_PASS = "FTDMP20072";
@@ -24,7 +25,7 @@ const char* MQTT_BROKER = "algxu5d14kq3f-ats.iot.us-east-2.amazonaws.com";
 const int MQTT_PORT = 8883;
 
 const char* CLIENT_ID = "Grupo8"; // unique client id
-const char* IN_TOPIC = "ucb/grupo8/on";   // subscribe
+const char* IN_TOPIC = "ucb/grupo8/riego";   // subscribe
 //const char* IN_TOPIC_ALEXA = "ucb/grupo8/on";   // subscribe
 const char* OUT_TOPIC = "ucb/iot/out"; // publish
 
@@ -126,8 +127,8 @@ void callback(const char* topic, byte* payload, unsigned int length) {
       if (action == "encendiendo riego"){
         estausAlexa=String(inputDoc["action"].as<char*>());
       }
-      else if (action == "detener") {
-        estatusAWS=action;
+      else if (action == "apagando riego") {
+        estausAlexa=action;
       }
       else Serial.println("Unsupported action received: " + action);
     }
@@ -138,15 +139,15 @@ void callback(const char* topic, byte* payload, unsigned int length) {
 
 
 void setup() {
+  dht.begin();
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
-  pinMode(32, INPUT);
-  digitalWrite(32, HIGH);
+  pinMode(HUMITY_PIN, INPUT);
+  digitalWrite(HUMITY_PIN, HIGH);
   pinMode(35, OUTPUT);
   digitalWrite(35, HIGH);
-  dht.begin();
-  //Serial.begin(115200);
-  Serial.begin(9600);
+  Serial.begin(115200);
+  //Serial.begin(9600);
   Serial.println("Connecting to WiFi...");
 
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -214,22 +215,22 @@ void loop() {
     }
   }
   else {
-     //readDataFromThings();
     mqttClient.loop();
-    //Serial.println(lecturaHumity);
     if(estausAlexa=="encendiendo riego"){
       lecturaHumity = analogRead(HUMITY_PIN);
       statusHumity= digitalRead(ESTATUS_HUMITY_PIN);
       temperature= readDataFromThings();
       if(lecturaHumity>1500 && temperature>17 && temperature<31){
         digitalWrite(LED_RED, LOW);
-        Serial.print("sepuede Regar");
+        estadoRiego="Se puede Regar";
         digitalWrite(LED_GREEN, HIGH);
         
       }
       else{
         digitalWrite(LED_RED, HIGH);
         digitalWrite(LED_GREEN, LOW);
+         estadoRiego="No se puede Regar";
+         estausAlexa="apagando riego";
       }
       Serial.print("La lectura es: ");
       delay(100);
@@ -237,12 +238,17 @@ void loop() {
       Serial.println();
       delay(100);
     }
-    if(estatusAWS=="detener"){
-      Serial.println("detene");
+    else if(estausAlexa=="apagando riego" ){
+      //Serial.println("Se detubo el riego");
+        digitalWrite(LED_RED, LOW);
+        digitalWrite(LED_GREEN, LOW);
+      estadoRiego="Se detubo el riego";
     }
     //Serial.println(statusHumity);
     delay(1000);
-    publishMessage(lecturaHumity);
+   // publishMessage(lecturaHumity);   
+   String message="{\"modoriego\":\""+estadoRiego+"\"}";
+    mqttClient.publish(OUT_TOPIC, message.c_str());
   }
    
 }
